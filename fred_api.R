@@ -3,6 +3,7 @@ library(httr)
 
 # observations documentation: https://research.stlouisfed.org/docs/api/fred/series_observations.html
 # Make sure function fred_setup, fred_tidy, and fred_mult are all loaded. Function below if they aren't.
+# You need an API key, saved as object 'fred_key' in file 'fred_key.RData'
 
 # Make selections
 
@@ -36,8 +37,8 @@ df <- fred_mult(series_id = series_id,
                   realtime_start = realtime_start,
                   realtime_end = realtime_end)
 
+# Example:
 p <- ggplot(df, aes(date, value, fill = series_id)) + geom_bar(stat = "identity", position = "dodge")
-
 p + recession_shade(startdate)
 
 # Functions!
@@ -57,6 +58,7 @@ fred_setup <- function(series_id, ...) {
   return(resp)
 }
 
+# This function extracts just the values and dates and collects it in a tidy way.
 fred_tidy <- function(series_id, ...) {
   raw <- fred_setup(series_id, ...)
   parsed <- content(raw)
@@ -68,7 +70,7 @@ fred_tidy <- function(series_id, ...) {
   return(frame)
 }
 
-
+# Allow for multiple series and combine into one tidy DF.
 fred_mult <- function(series_id, ...) {
   df <- tibble(date = as.Date(character()),
                value = as.numeric(),
