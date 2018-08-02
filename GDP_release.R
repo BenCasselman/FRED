@@ -9,40 +9,70 @@ library(scales)
 
 load("bea_key.RData")
 
-# Basic method
-beaSpecs <- list(
-  'UserID' = bea_key,
-  'Method' = 'GetData',
-  'datasetname' = 'NIPA',
-  'TableName' = 'T10101',
-  'Frequency' = 'Q',
-  'Year' = 'X',
-  'ResultFormat' = 'json'
-)
+# Get data:
+gdp_saar <- bea_all("T10101", "Q")
+gdp_breakdown <- bea_all("T10401", "Q")
 
-test <- beaGet(beaSpecs, asWide = F)
+gdp_contrib <- bea_all("T10102", "Q")
+pce <- bea_all("T10111", "Q")
+gdp_quantity <- bea_all("T10103", "Q")
+prods <- bea_all("T10506", "Q")
 
-# Function for standard call: All available dates, in tidy format
+# Check latest date
+max(gdp_saar$date)
 
-bea_all <- function(table, freq) {
-  beaSpecs <- list(
-    'UserID' = bea_key,
-    'Method' = 'GetData',
-    'datasetname' = 'NIPA',
-    'TableName' = table,
-    'Frequency' = freq,
-    'Year' = 'X',
-    'ResultFormat' = 'json'
-  ) 
-  df <- beaGet(beaSpecs, asWide = F)
-  df <- df %>% mutate(date = ymd(paste0(substr(TimePeriod, 1, 4), "-", as.numeric(substr(TimePeriod, 6,6))*3-2, "-01"))) %>% 
-    select(date, TableName, SeriesCode, LineNumber, LineDescription, CL_UNIT, DataValue) %>% as.tibble(.)
-  return(df)
+# Key numbers:
+
+gdp_saar %>% 
+  filter(LineNumber %in% c(1, 16, 2, 7)) %>% 
+  group_by(LineDescription) %>% 
+  mutate(last = lag(DataValue, 1)) %>% 
+  filter(date == max(date)) %>% 
+  select(LineDescription, date, latest = DataValue, last) %>% 
+  mutate(change = ifelse(latest > last, "faster",
+                         ifelse(last > latest, "slower", "unchanged")))
+
+# Last Q this good:
+last_good(1)
+
+# Supplemental estimates:
+gdp_breakdown %>% 
+  filter(date >= ymd("2010-01-01"),
+         LineNumber %in% c(6, 8)) %>% 
+  mutate(LineNumber = factor(LineNumber, levels = c(6,8), labels = c("final_domestic", "final_pvt_domestic"))) %>% 
+  select(LineNumber, date, DataValue) %>% 
+  spread(LineNumber, DataValue) %>% 
+  arrange(desc(date))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Last quarter as good as this one:
+last_good <- function(lineno) {
+  latest <- gdp_saar %>% 
+    filter(date == max(date), LineNumber == lineno) %>% 
+    select(DataValue) %>% 
+    as.numeric()
+  gdp_saar %>% 
+    filter((date == max(date) | DataValue >= latest), LineNumber == lineno) %>% 
+    arrange(desc(date)) %>% 
+    select(date, LineDescription, DataValue)
 }
 
-# Percent change at SAAR: (table 1)
-
-gdp_saar <- bea_all("T10101", "Q")
 
 # GDP per quarter
 p1 <- gdp_saar %>% 
@@ -80,17 +110,9 @@ gdp_saar %>%
   mutate(series = factor(LineNumber, levels = c("2", "7", "16", "19", "22"), 
                          labels = c("Consumer spending", "Business investment", "Exports", "Imports", "Government spending"))) %>% 
   ggplot(., aes(date, DataValue, fill = series)) + geom_bar(position = "dodge", stat = "identity")
-  
 
-
-# Contributions to change:
-# Percent change at SAAR: (table 1)
-
-gdp_contrib <- bea_all("T10102", "Q")
 
 # Final sales
-gdp_breakdown <- bea_all("T10401", "Q")
-
 p2 <- gdp_breakdown %>% 
   filter(date >= ymd("2005-01-01"),
          LineNumber == 7) %>% 
@@ -168,19 +190,17 @@ priv_final <- priv_final + recession_shade("2005-01-01") +
         axis.ticks = element_line(colour = "grey", size = 0.15),
         plot.caption = element_text(colour = "grey50", size = 14)) +
   geom_hline(yintercept = 0, colour = "black") +
-  scale_y_continuous(label = function(x) paste0(x, "%"))
+  scale_y_continuous(label = function(x) paste0(x, "%"), breaks = c(-7.5, -5, -2.5, 0, 2.5, 5))
 
 ggsave("~/FRED/charts/final_pvt_demand.png", priv_final, device = "png", width = 14.2, height = 8)
 
 
 # Price indexes
-pce <- bea_all("T10111", "Q")
-
 p4 <- pce %>% 
   filter(date >= ymd("2005-01-01"),
          LineNumber %in% c("39", "40")) %>% 
   ggplot(., aes(date, DataValue, colour = LineNumber)) + geom_line()
-  
+
 p4 <- p4 + recession_shade("2005-01-01") +
   scale_colour_manual(values = c(`39` = "grey70", `40` = "#F8766D")) +
   labs(x = NULL, y = NULL,
@@ -206,8 +226,6 @@ p4 <- p4 + recession_shade("2005-01-01") +
 ggsave("~/FRED/charts/inflation.png", p4, device = "png", width = 7.1, height = 4)
 
 # Car sales
-gdp_detail <- bea_all("T10501", "Q")
-
 # autos <- gdp_detail %>% 
 #   filter(LineNumber == "5",
 #          date >= ymd("2000-01-01")) %>% 
@@ -267,8 +285,6 @@ gdp_detail %>%
 
 
 # Goods vs services
-gdp_quantity <- bea_all("T10103", "Q")
-
 spend2 <- gdp_quantity %>% 
   filter(LineNumber %in% c("3", "6"),
          date >= ymd("2007-10-01")) %>% 
@@ -306,9 +322,9 @@ biz <- gdp_saar %>%
   ggplot(., aes(date, DataValue, fill = LineDescription)) + geom_bar(stat = "identity", position = "dodge")
 
 biz <- biz + labs(x = NULL, y = NULL,
-     title = "Quarterly change in business investment",
-     subtitle = "Seasonally adjusted at an annual rate. Data for most recent quarter is preliminary.",
-     caption = "Source: Bureau of Economic Analysis") +
+                  title = "Quarterly change in business investment",
+                  subtitle = "Seasonally adjusted at an annual rate. Data for most recent quarter is preliminary.",
+                  caption = "Source: Bureau of Economic Analysis") +
   scale_fill_manual(values = c(Equipment = "#F8766D", Structures = "grey50", `Intellectual property` = "grey60")) +
   theme(legend.position = c(.2, .2),
         legend.title = element_blank(),
@@ -328,8 +344,6 @@ ggsave("~/FRED/charts/biz.png", biz, device = "png", width = 7.1, height = 4)
 
 
 # Personal income
-income <- bea_all("T20100", "Q")
-
 
 gdp_quantity %>% filter(LineNumber == "1") %>% write.csv(., file = "gdpqi.csv")
 
@@ -365,14 +379,12 @@ seas <- seas + recession_shade("2005-01-01") +
 
 # GDP by major product
 
-prods <- bea_all("T10506", "Q")
-
 prods %>% 
   filter(LineNumber %in% c("5", "6", "7", "8"), date >= ymd("2012-01-01")) %>% 
   ggplot(., aes(date, DataValue, fill = LineDescription)) + geom_bar(stat = "identity", position = "dodge")
-  
-  ggplot(., aes(date, DataValue)) + geom_bar(stat = "identity")
- 
+
+ggplot(., aes(date, DataValue)) + geom_bar(stat = "identity")
+
 
 cars <- prods %>% 
   filter(LineNumber %in% c("2", "5"), date >= ymd("2012-01-01")) %>% 
