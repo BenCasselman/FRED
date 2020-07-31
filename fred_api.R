@@ -8,7 +8,7 @@ library(httr)
 # Make selections
 
 # This entry is REQUIRED. Can included multiple series
-series_id <- c("PAYEMS", "USPRIV")  # Only required entry
+series_id <- c("PAYEMS", "USPRIV", "MANEMP")  # Only required entry
 
 # These are all optional. These must be consistent for all series IDs.
 startdate <- "1980-01-01"
@@ -46,7 +46,7 @@ p + recession_shade(startdate)
 # Run it alone if you want anything other than the straight tidy data (for ex., if you're using vintages).
 fred_setup <- function(series_id, ...) {
   params <- list(...)
-  load("fred_key.RData")
+  load("~/FRED/fred_key.RData")
   params$api_key <- fred_key
   params$file_type <- "json"
   params$series_id <- series_id
@@ -61,7 +61,7 @@ fred_setup <- function(series_id, ...) {
 # This function extracts just the values and dates and collects it in a tidy way.
 fred_tidy <- function(series_id, ...) {
   raw <- fred_setup(series_id, ...)
-  parsed <- content(raw)
+  parsed <- httr::content(raw)
   frame <- bind_rows(parsed$observations)
   frame <- frame %>% select(-realtime_start, -realtime_end) %>% 
     mutate(series_id = series_id,

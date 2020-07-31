@@ -7,7 +7,7 @@ library(httr)
 
 alfred_setup <- function(series_id, vintage_dates, ...) {
   params <- list(...)
-  load("fred_key.RData")
+  load("~/FRED/fred_key.RData")
   params$api_key <- fred_key
   params$file_type <- "json"
   params$series_id <- series_id

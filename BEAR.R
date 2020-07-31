@@ -113,3 +113,35 @@ last_good <- function(lineno, hilo = "hi", tablename = "T10101") {
   }
   
 }
+
+bea_trade <- function(indicator = "All", country = "AllCountries", freq = 'All', year = "All", dataset = 'ITA') {
+  library(bea.R)
+  library(tidyverse)
+  library(lubridate)
+  
+  load("~/FRED/bea_key.RData")
+  
+  beaSpecs <- list(
+    'UserID' = bea_key,
+    'Method' = 'GetData',
+    'datasetname' = dataset,
+    'Indicator' = indicator,
+    'AreaOrCountry' = country,
+    'Frequency' = freq,
+    'Year' = year,
+    'ResultFormat' = 'json'
+  ) 
+  df <- beaGet(beaSpecs, asWide = F)
+  if (nrow(df) == 0) return(NULL)
+  
+  df <- df %>%
+    mutate(date = case_when(Frequency == "A" ~ ymd(paste(Year, 1, 1, sep = "-")),
+                            TRUE ~ ymd(paste0(substr(TimePeriod, 1, 4), "-", as.numeric(substr(TimePeriod, 6,6))*3-2, "-01")))) %>%
+    select(date, Frequency, Indicator, country = AreaOrCountry, series_name = TimeSeriesDescription, CL_UNIT, DataValue) %>%
+    as_tibble(.)
+  return(df)
+}
+
+saar <- function(var, periods = 1, periods_in_year = 4) {
+  (var/lag(var, periods))^(periods_in_year/periods) - 1
+}
