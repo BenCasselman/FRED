@@ -4,10 +4,9 @@
 
 # Basic method
 load("~/FRED/bea_key.RData")
-beaSpecs <- list(
+specs <- list(
   'UserID' = bea_key,
   'Method' = 'GetData',
-  'datasetname' = 'NIPA',
   'TableName' = 'T10101',
   'Frequency' = 'Q',
   'Year' = 'X',
@@ -18,7 +17,7 @@ beaSpecs <- list(
 
 # Function for standard call: All available dates, in tidy format
 
-bea_all <- function(table, freq = 'Q', dataset = 'NIPA') {
+bea_all <- function(table, freq = 'Q', dataset = 'NIPA', beaSpecs = specs) {
   library(bea.R)
   library(tidyverse)
   library(lubridate)
@@ -35,8 +34,15 @@ bea_all <- function(table, freq = 'Q', dataset = 'NIPA') {
     'ResultFormat' = 'json'
   ) 
   df <- beaGet(beaSpecs, asWide = F)
+  
+  if (freq == "Q") {
   df <- df %>% mutate(date = ymd(paste0(substr(TimePeriod, 1, 4), "-", as.numeric(substr(TimePeriod, 6,6))*3-2, "-01"))) %>% 
     select(date, TableName, SeriesCode, LineNumber, LineDescription, CL_UNIT, DataValue) %>% as.tibble(.)
+  } else if (freq == "M") {
+    df <- df %>% 
+      mutate(date = ymd(paste0(substr(TimePeriod, 1, 4), "-", as.numeric(substr(TimePeriod, 6,7)), "-01"))) %>% 
+      select(date, TableName, SeriesCode, LineNumber, LineDescription, CL_UNIT, DataValue) %>% as.tibble(.)
+  }
   return(df)
 }
 

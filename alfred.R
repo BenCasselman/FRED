@@ -80,3 +80,7 @@ df <- alfred_mult(series_id = series_id,
                 output_type = output,
                 realtime_start = realtime_start,
                 realtime_end = realtime_end)
+
+
+
+
